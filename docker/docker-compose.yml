@@ -1,0 +1,72 @@
+version: "3"
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: mosquitto
+    volumes:
+      - ./mosquitto/conf/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./mosquitto/log:/mosquitto/log
+      - ./mosquitto/data:/mosquitto/data
+    ports:
+      - 1883:1883
+    networks:
+      - mqtt_network
+    restart: unless-stopped
+
+  mqtt-exporter:
+    build: ./mqtt_exporter
+    container_name: mqtt_exporter
+    depends_on:
+      - mosquitto
+      - prometheus
+    environment:
+    #CONFIGURACIÓN BROKER INTERNO
+      - INT_MQTT_ADDRESS=mosquitto
+      - INT_MQTT_PORT=1883
+    #CONFIGURACIÓN BROKER EXTERNO
+      - EXT_BROKER_ADDRESS=broker.emqx.io
+      - EXT_BROKER_PORT=1883
+    volumes:
+      - ./mqtt_exporter/log:/mqtt_exporter/log
+    ports:
+      - 9000:9000
+    networks:
+      - mqtt_network
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus/config:/etc/prometheus/
+      - prometheus_data:/prometheus/data
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    ports:
+      - 9090:9090
+    networks:
+      - mqtt_network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - 3000:3000
+    volumes:
+      - ./grafana/config/datasources:/etc/grafana/datasources
+      - ./grafana/config/dashboards:/etc/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    networks:
+      - mqtt_network
+    restart: unless-stopped
+
+networks:
+  mqtt_network:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:
